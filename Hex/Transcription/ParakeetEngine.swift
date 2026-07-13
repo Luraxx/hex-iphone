@@ -39,16 +39,44 @@ actor ParakeetEngine {
         }
     }
 
+    private var loadTask: Task<Void, Error>?
+    private var loadingModel: HexModel?
+
     /// Loads (and downloads if needed) the model. Progress 0...1, best effort:
     /// FluidAudio reports no download progress, so — like Hex — the directory
     /// size is polled against the target size (~650 MB).
+    ///
+    /// Concurrent callers share one in-flight load: the actor is reentrant at
+    /// suspension points, so without deduplication the preload (recording start)
+    /// and the transcription (stop) would compile the CoreML models twice in
+    /// parallel — the device logs showed exactly that (~27 s, twice).
     func ensureLoaded(_ model: HexModel, progress: @escaping @Sendable (Double) -> Void) async throws {
         if isLoaded(model) {
             progress(1)
             return
         }
+        if let running = loadTask, loadingModel == model {
+            try await running.value
+            progress(1)
+            return
+        }
+
+        loadTask?.cancel()
         asr = nil
         loadedModel = nil
+        loadingModel = model
+        let task = Task { try await self.performLoad(model, progress: progress) }
+        loadTask = task
+        defer {
+            if loadingModel == model {
+                loadTask = nil
+                loadingModel = nil
+            }
+        }
+        try await task.value
+    }
+
+    private func performLoad(_ model: HexModel, progress: @escaping @Sendable (Double) -> Void) async throws {
         progress(0.02)
 
         let needsDownload = !isDownloaded(model)

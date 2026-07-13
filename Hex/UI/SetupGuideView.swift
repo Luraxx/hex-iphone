@@ -33,6 +33,15 @@ struct SetupGuideView: View {
                 }
             }
 
+            Section("Zwischenablage überall (optional, empfohlen)") {
+                Text("iOS verbietet Apps das Kopieren im Hintergrund — der Kurzbefehle-App aber nicht. Mit diesem Mini-Kurzbefehl landet der Text nach jedem Diktat sicher in der Zwischenablage, ganz ohne Hex-Tastatur:")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                Step(number: 1, text: "Kurzbefehle-App → „+“ → Aktion „Diktat starten/stoppen“ (von Hex) hinzufügen.")
+                Step(number: 2, text: "Zweite Aktion „In Zwischenablage kopieren“ hinzufügen — als Eingabe das Ergebnis des Hex-Schritts wählen.")
+                Step(number: 3, text: "Dem Kurzbefehl einen Namen geben (z. B. „Diktat+Kopie“) und ihn dem Action Button zuweisen — statt des direkten Hex-Befehls.")
+            }
+
             Section("So diktierst du") {
                 Step(number: 1, text: "In einer beliebigen App ins Textfeld tippen und mit dem Globus-Symbol zur Hex-Tastatur wechseln.")
                 Step(number: 2, text: "Action Button drücken und sprechen.")

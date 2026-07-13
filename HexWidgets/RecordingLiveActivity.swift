@@ -18,7 +18,7 @@ extension RecordingActivityAttributes.ContentState.Phase {
         switch self {
         case .ready: "hexagon"
         case .recording: "mic.fill"
-        case .transcribing: "waveform"
+        case .transcribing: "ellipsis"
         case .done: "checkmark.circle.fill"
         case .failed: "exclamationmark.triangle.fill"
         }
@@ -28,7 +28,7 @@ extension RecordingActivityAttributes.ContentState.Phase {
         switch self {
         case .ready: .secondary
         case .recording: .red
-        case .transcribing: .orange
+        case .transcribing: .secondary
         case .done: .green
         case .failed: .yellow
         }
@@ -113,8 +113,7 @@ struct RecordingLiveActivity: Widget {
                         .frame(maxWidth: 44)
                         .foregroundStyle(.red)
                 } else {
-                    Image(systemName: "hexagon")
-                        .foregroundStyle(.secondary)
+                    EmptyView()
                 }
             } minimal: {
                 Image(systemName: context.state.phase.symbol)

@@ -30,12 +30,19 @@ struct ToggleDictationIntent: AudioRecordingIntent, ForegroundContinuableIntent 
     )
     static let openAppWhenRun = false
 
+    /// Returns the transcript on stop (empty on start), so users can chain the
+    /// intent in the Shortcuts app — e.g. with "Copy to Clipboard", which is
+    /// allowed to write the pasteboard even though backgrounded apps are not.
     @MainActor
-    func perform() async throws -> some IntentResult {
+    func perform() async throws -> some IntentResult & ReturnsValue<String> {
         // Stopping needs no Live Activity gymnastics — handle it first.
         if AppModel.shared.isRecording {
             await AppModel.shared.stopDictation()
-            return .result()
+            var text = ""
+            if case let .done(transcript) = AppModel.shared.state {
+                text = transcript.text
+            }
+            return .result(value: text)
         }
 
         // Without microphone permission, fail loudly (the system shows the
@@ -53,7 +60,7 @@ struct ToggleDictationIntent: AudioRecordingIntent, ForegroundContinuableIntent 
                 _ = await AppModel.shared.startDictation()
             }
         }
-        return .result()
+        return .result(value: "")
     }
 }
 
