@@ -48,10 +48,9 @@ struct ToggleDictationIntent: AudioRecordingIntent, ForegroundContinuableIntent 
         if outcome == .liveActivityUnavailable {
             // Headless start impossible right now — hop to the foreground, where
             // starting the Live Activity is always permitted, and retry there.
-            return try await requestToContinueInForeground(nil) {
+            try await requestToContinueInForeground {
                 await AppModel.shared.waitUntilForeground()
                 _ = await AppModel.shared.startDictation()
-                return .result()
             }
         }
         return .result()
