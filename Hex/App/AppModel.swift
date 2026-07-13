@@ -56,15 +56,22 @@ final class AppModel: DictationPerforming {
 
     // MARK: - DictationPerforming (Intents + UI)
 
-    /// Entry point for the Action Button intent. `openAppWhenRun` brings the app to
-    /// the foreground; we wait until it is actually active before toggling, because
-    /// starting the Live Activity fails with "Target is not foreground" otherwise.
-    func handleActionButton() async {
+    enum StartOutcome {
+        case started
+        /// Background start refused because the mandatory Live Activity could not
+        /// be started ("Target is not foreground"). The intent reacts with a brief
+        /// foreground hop and retries.
+        case liveActivityUnavailable
+        case failed
+    }
+
+    /// Used by the intent after `requestToContinueInForeground` — gives the app a
+    /// moment to actually become active before retrying the start.
+    func waitUntilForeground() async {
         for _ in 0 ..< 50 {
-            if UIApplication.shared.applicationState == .active { break }
+            if UIApplication.shared.applicationState == .active { return }
             try? await Task.sleep(for: .milliseconds(100))
         }
-        await toggleDictation()
     }
 
     func toggleDictation() async {
@@ -78,34 +85,32 @@ final class AppModel: DictationPerforming {
         }
     }
 
-    func startDictation() async {
-        guard !isRecording, state != .transcribing else { return }
+    @discardableResult
+    func startDictation() async -> StartOutcome {
+        guard !isRecording, state != .transcribing else { return .failed }
         switch AVAudioApplication.shared.recordPermission {
         case .granted:
             break
         case .undetermined:
             guard await AVAudioApplication.requestRecordPermission() else {
                 state = .failed("Ohne Mikrofon-Zugriff kann Hex nicht aufnehmen.")
-                return
+                return .failed
             }
         default:
             state = .failed("Mikrofon-Zugriff fehlt. Bitte in den iOS-Einstellungen für Hex erlauben.")
-            return
+            return .failed
         }
 
         let startedAt = Date.now
-        // Start the Live Activity FIRST and confirm it is actually running. When the
-        // Action Button launches us into the background, iOS HARD-CRASHES an
-        // AudioRecordingIntent that activates the mic without a running Live Activity
-        // (which also leaves the mic stuck on). So in the background we only record
-        // when the Live Activity started. In the foreground (in-app mic button) we
-        // record directly and that assertion does not apply, so we proceed regardless.
-        let liveActivityStarted = liveActivity.startRecording(startedAt: startedAt)
+        // Start the Live Activity FIRST and confirm it is actually running. iOS
+        // HARD-CRASHES an AudioRecordingIntent that has an active audio session
+        // without a running Live Activity (and leaves the mic stuck on). So in the
+        // background we only touch the mic when the Live Activity is up; otherwise
+        // we report .liveActivityUnavailable and the intent retries after a brief
+        // foreground hop. In the foreground the Live Activity is optional.
+        var liveActivityStarted = liveActivity.startRecording(startedAt: startedAt)
         if !liveActivityStarted, UIApplication.shared.applicationState != .active {
-            state = .failed(liveActivity.lastStartError
-                ?? "Live-Aktivität konnte nicht gestartet werden. Bitte in Einstellungen → Hex die „Live-Aktivitäten“ einschalten.")
-            Feedback.error()
-            return
+            return .liveActivityUnavailable
         }
 
         do {
@@ -117,6 +122,13 @@ final class AppModel: DictationPerforming {
             lastError = nil
             Feedback.recordStart()
             DarwinNotify.post(SharedConstants.Darwin.recordingStateChanged)
+
+            // Foreground start whose Live Activity failed on the first try: retry
+            // once now that the audio session is active. Recording in the background
+            // without a Live Activity would crash a later Action Button stop.
+            if !liveActivityStarted, UIApplication.shared.applicationState == .active {
+                liveActivityStarted = liveActivity.startRecording(startedAt: startedAt)
+            }
 
             // NOTE: the ~650 MB model is deliberately NOT preloaded here. On a cold
             // background launch (Action Button) that memory spike gets the process
@@ -131,12 +143,14 @@ final class AppModel: DictationPerforming {
                 guard !Task.isCancelled else { return }
                 await self?.stopDictation()
             }
+            return .started
         } catch {
             liveActivity.endImmediately()
             recorder.shutdown()
             finishBackgroundWork()
             state = .failed(error.localizedDescription)
             Feedback.error()
+            return .failed
         }
     }
 

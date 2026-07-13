@@ -1,27 +1,59 @@
 import AppIntents
+import AVFoundation
 
-/// The main intent for the Action Button (and Shortcuts/Siri): opens Hex and
-/// toggles dictation (start, or stop + transcribe).
+enum DictationIntentError: Error, CustomLocalizedStringResourceConvertible {
+    case microphonePermissionMissing
+
+    var localizedStringResource: LocalizedStringResource {
+        switch self {
+        case .microphonePermissionMissing:
+            "Bitte öffne Hex einmal und erlaube den Mikrofon-Zugriff."
+        }
+    }
+}
+
+/// The main intent for the Action Button (and Shortcuts/Siri): toggles dictation.
 ///
-/// Why it opens the app instead of recording in the background: iOS refuses to
-/// start a Live Activity from the background ("Target is not foreground"), and an
-/// `AudioRecordingIntent` that activates the mic without a Live Activity is
-/// hard-crashed by the system. So this is a plain `AppIntent` with
-/// `openAppWhenRun = true`: it brings Hex to the foreground, where recording and
-/// the Live Activity start reliably. Recording then continues via the audio
-/// background mode after you leave the app, and can be stopped from the Dynamic
-/// Island ("Fertig") or by pressing the Action Button again.
-struct ToggleDictationIntent: AppIntent {
+/// Headless-first strategy (same pattern as other shipping dictation apps):
+/// `AudioRecordingIntent` lets us record in the background, but iOS mandates a
+/// running Live Activity for that — and `Activity.request` from a background
+/// launch is refused by ActivityKit in some situations ("Target is not
+/// foreground"). So we TRY the fully headless start first; only when the Live
+/// Activity cannot be started do we fall back to a brief foreground hop via
+/// `ForegroundContinuableIntent` and start there. When the headless start
+/// succeeds, the app never comes to the front at all.
+struct ToggleDictationIntent: AudioRecordingIntent, ForegroundContinuableIntent {
     static let title: LocalizedStringResource = "Diktat starten/stoppen"
     static let description = IntentDescription(
-        "Öffnet Hex und startet die Aufnahme bzw. stoppt sie und wandelt sie lokal auf dem Gerät in Text um.",
+        "Startet die Hex-Aufnahme bzw. stoppt sie und wandelt sie lokal auf dem Gerät in Text um.",
         categoryName: "Diktat"
     )
-    static let openAppWhenRun = true
+    static let openAppWhenRun = false
 
     @MainActor
     func perform() async throws -> some IntentResult {
-        await AppModel.shared.handleActionButton()
+        // Stopping needs no Live Activity gymnastics — handle it first.
+        if AppModel.shared.isRecording {
+            await AppModel.shared.stopDictation()
+            return .result()
+        }
+
+        // Without microphone permission, fail loudly (the system shows the
+        // message as a banner) instead of failing silently in the background.
+        guard AVAudioApplication.shared.recordPermission == .granted else {
+            throw DictationIntentError.microphonePermissionMissing
+        }
+
+        let outcome = await AppModel.shared.startDictation()
+        if outcome == .liveActivityUnavailable {
+            // Headless start impossible right now — hop to the foreground, where
+            // starting the Live Activity is always permitted, and retry there.
+            return try await requestToContinueInForeground(nil) {
+                await AppModel.shared.waitUntilForeground()
+                _ = await AppModel.shared.startDictation()
+                return .result()
+            }
+        }
         return .result()
     }
 }
