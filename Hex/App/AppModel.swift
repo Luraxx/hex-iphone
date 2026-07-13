@@ -34,7 +34,6 @@ final class AppModel: DictationPerforming {
     private let liveActivity = LiveActivityController()
     private var backgroundTask: UIBackgroundTaskIdentifier = .invalid
     private var maxDurationTask: Task<Void, Never>?
-    private var preloadTask: Task<Void, Never>?
 
     private init() {
         DictationBridge.performer = self
@@ -84,19 +83,25 @@ final class AppModel: DictationPerforming {
         }
 
         do {
-            try recorder.startCapture(to: Self.recordingURL())
             let startedAt = Date.now
+            // Start the Live Activity FIRST. When the Action Button launches us into
+            // the background, iOS keeps an AudioRecordingIntent alive only while a
+            // Live Activity is running — establish it before touching the audio engine.
+            liveActivity.startRecording(startedAt: startedAt)
+            // Hold a background assertion so the cold background launch is not
+            // suspended in the moment before the audio session becomes active.
+            beginBackgroundWork()
+            try recorder.startCapture(to: Self.recordingURL())
             state = .recording(startedAt: startedAt)
             lastError = nil
-            liveActivity.startRecording(startedAt: startedAt)
             Feedback.recordStart()
             DarwinNotify.post(SharedConstants.Darwin.recordingStateChanged)
 
-            // Warm up the model in parallel so stop → text is fast.
-            let model = HexModel.selected
-            preloadTask = Task.detached(priority: .userInitiated) {
-                try? await ParakeetEngine.shared.ensureLoaded(model, progress: { _ in })
-            }
+            // NOTE: the ~650 MB model is deliberately NOT preloaded here. On a cold
+            // background launch (Action Button) that memory spike gets the process
+            // jetsammed mid-recording. It is loaded lazily at stop time instead, where
+            // the still-active audio session + Live Activity keep us alive with a
+            // proper memory budget.
 
             // Safety net against forgotten recordings.
             let capMinutes = max(1, SharedSettings.maxMinutes)
@@ -106,7 +111,9 @@ final class AppModel: DictationPerforming {
                 await self?.stopDictation()
             }
         } catch {
+            liveActivity.endImmediately()
             recorder.shutdown()
+            finishBackgroundWork()
             state = .failed(error.localizedDescription)
             Feedback.error()
         }
