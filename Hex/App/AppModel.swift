@@ -56,6 +56,17 @@ final class AppModel: DictationPerforming {
 
     // MARK: - DictationPerforming (Intents + UI)
 
+    /// Entry point for the Action Button intent. `openAppWhenRun` brings the app to
+    /// the foreground; we wait until it is actually active before toggling, because
+    /// starting the Live Activity fails with "Target is not foreground" otherwise.
+    func handleActionButton() async {
+        for _ in 0 ..< 50 {
+            if UIApplication.shared.applicationState == .active { break }
+            try? await Task.sleep(for: .milliseconds(100))
+        }
+        await toggleDictation()
+    }
+
     func toggleDictation() async {
         switch state {
         case .recording:
