@@ -82,12 +82,22 @@ final class AppModel: DictationPerforming {
             return
         }
 
+        let startedAt = Date.now
+        // Start the Live Activity FIRST and confirm it is actually running. When the
+        // Action Button launches us into the background, iOS HARD-CRASHES an
+        // AudioRecordingIntent that activates the mic without a running Live Activity
+        // (which also leaves the mic stuck on). So in the background we only record
+        // when the Live Activity started. In the foreground (in-app mic button) we
+        // record directly and that assertion does not apply, so we proceed regardless.
+        let liveActivityStarted = liveActivity.startRecording(startedAt: startedAt)
+        if !liveActivityStarted, UIApplication.shared.applicationState != .active {
+            state = .failed(liveActivity.lastStartError
+                ?? "Live-Aktivität konnte nicht gestartet werden. Bitte in Einstellungen → Hex die „Live-Aktivitäten“ einschalten.")
+            Feedback.error()
+            return
+        }
+
         do {
-            let startedAt = Date.now
-            // Start the Live Activity FIRST. When the Action Button launches us into
-            // the background, iOS keeps an AudioRecordingIntent alive only while a
-            // Live Activity is running — establish it before touching the audio engine.
-            liveActivity.startRecording(startedAt: startedAt)
             // Hold a background assertion so the cold background launch is not
             // suspended in the moment before the audio session becomes active.
             beginBackgroundWork()
