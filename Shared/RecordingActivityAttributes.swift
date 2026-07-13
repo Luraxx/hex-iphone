@@ -6,6 +6,10 @@ import Foundation
 struct RecordingActivityAttributes: ActivityAttributes {
     struct ContentState: Codable, Hashable {
         enum Phase: String, Codable, Hashable {
+            /// Standby: a persistent, quiet activity that exists so a background
+            /// start only needs to UPDATE it (allowed anytime) instead of
+            /// requesting a new one (forbidden from the background).
+            case ready
             case recording
             case transcribing
             case done

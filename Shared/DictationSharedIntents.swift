@@ -17,6 +17,23 @@ enum DictationBridge {
     static var performer: (any DictationPerforming)?
 }
 
+/// Starts recording from the persistent "ready" Live Activity (button in the
+/// Dynamic Island / on the lock screen). Runs in the app's process
+/// (LiveActivityIntent); AudioRecordingIntent permits the background mic start —
+/// the Live Activity already exists and only gets updated.
+struct StartDictationFromActivityIntent: LiveActivityIntent, AudioRecordingIntent {
+    static let title: LocalizedStringResource = "Diktat starten"
+    static let description = IntentDescription("Startet die Hex-Aufnahme aus der Bereitschaftsanzeige.")
+    static let isDiscoverable = false
+    static let openAppWhenRun = false
+
+    @MainActor
+    func perform() async throws -> some IntentResult {
+        await DictationBridge.performer?.toggleDictation()
+        return .result()
+    }
+}
+
 /// Stops the current recording and transcribes it (Live Activity button).
 struct StopDictationIntent: LiveActivityIntent {
     static let title: LocalizedStringResource = "Diktat beenden"

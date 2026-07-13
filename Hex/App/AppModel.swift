@@ -34,6 +34,11 @@ final class AppModel: DictationPerforming {
     private let liveActivity = LiveActivityController()
     private var backgroundTask: UIBackgroundTaskIdentifier = .invalid
     private var maxDurationTask: Task<Void, Never>?
+    private var preloadTask: Task<Void, Never>?
+    /// Set when the auto-copy happened in the background, where iOS may reject
+    /// pasteboard writes ("Pasteboard ... is not available at this time") —
+    /// retried the next time the app becomes active.
+    private var clipboardCopyPending = false
 
     private init() {
         DictationBridge.performer = self
@@ -71,6 +76,30 @@ final class AppModel: DictationPerforming {
         for _ in 0 ..< 50 {
             if UIApplication.shared.applicationState == .active { return }
             try? await Task.sleep(for: .milliseconds(100))
+        }
+    }
+
+    /// Called on every scene activation: refreshes the standby Live Activity
+    /// (start is only allowed in the foreground) and retries a clipboard copy
+    /// that iOS rejected while we were in the background.
+    func appBecameActive() {
+        if SharedSettings.readyIndicator {
+            liveActivity.ensureReadyActivity()
+        }
+        if clipboardCopyPending, SharedSettings.autoCopy, let latest = store.latest() {
+            UIPasteboard.general.string = latest.text
+            clipboardCopyPending = false
+        }
+        refreshDownloadedModels()
+    }
+
+    /// Settings toggle for the standby indicator in the Dynamic Island.
+    func setReadyIndicator(_ enabled: Bool) {
+        SharedSettings.readyIndicator = enabled
+        if enabled {
+            liveActivity.ensureReadyActivity()
+        } else if !isRecording, state != .transcribing {
+            liveActivity.endReadyActivity()
         }
     }
 
@@ -130,11 +159,14 @@ final class AppModel: DictationPerforming {
                 liveActivityStarted = liveActivity.startRecording(startedAt: startedAt)
             }
 
-            // NOTE: the ~650 MB model is deliberately NOT preloaded here. On a cold
-            // background launch (Action Button) that memory spike gets the process
-            // jetsammed mid-recording. It is loaded lazily at stop time instead, where
-            // the still-active audio session + Live Activity keep us alive with a
-            // proper memory budget.
+            // Warm up the model WHILE recording (first cold load compiles CoreML for
+            // ~30 s — done here it overlaps with speaking instead of delaying the
+            // result after stop). The device-log jetsam fear proved unfounded; the
+            // earlier crash was the Live Activity assertion.
+            let model = HexModel.selected
+            preloadTask = Task.detached(priority: .userInitiated) {
+                try? await ParakeetEngine.shared.ensureLoaded(model, progress: { _ in })
+            }
 
             // Safety net against forgotten recordings.
             let capMinutes = max(1, SharedSettings.maxMinutes)
@@ -145,7 +177,7 @@ final class AppModel: DictationPerforming {
             }
             return .started
         } catch {
-            liveActivity.endImmediately()
+            liveActivity.revertToReadyOrEnd(keepReady: SharedSettings.readyIndicator)
             recorder.shutdown()
             finishBackgroundWork()
             state = .failed(error.localizedDescription)
@@ -163,7 +195,7 @@ final class AppModel: DictationPerforming {
         guard let capture = recorder.finishCapture() else {
             recorder.shutdown()
             state = .idle
-            liveActivity.endImmediately()
+            liveActivity.revertToReadyOrEnd(keepReady: SharedSettings.readyIndicator)
             finishBackgroundWork()
             return
         }
@@ -173,7 +205,7 @@ final class AppModel: DictationPerforming {
             recorder.shutdown()
             cleanup(capture.url)
             state = .idle
-            await liveActivity.end(phase: .done, message: "Zu kurz, verworfen", after: 2)
+            await liveActivity.finish(phase: .done, message: "Zu kurz, verworfen", after: 2, keepReady: SharedSettings.readyIndicator)
             DarwinNotify.post(SharedConstants.Darwin.recordingStateChanged)
             finishBackgroundWork()
             return
@@ -190,19 +222,20 @@ final class AppModel: DictationPerforming {
 
             if text.isEmpty {
                 state = .idle
-                await liveActivity.end(phase: .done, message: "Nichts erkannt", after: 3)
+                await liveActivity.finish(phase: .done, message: "Nichts erkannt", after: 3, keepReady: SharedSettings.readyIndicator)
             } else {
                 let transcript = Transcript(text: text, duration: capture.duration, modelID: model.identifier)
                 store.append(transcript)
                 store.setPending(transcript)
                 if SharedSettings.autoCopy {
                     UIPasteboard.general.string = text
+                    clipboardCopyPending = UIApplication.shared.applicationState != .active
                 }
                 state = .done(transcript)
                 Feedback.done()
                 DarwinNotify.post(SharedConstants.Darwin.newTranscript)
                 let suffix = SharedSettings.autoCopy ? " — kopiert" : ""
-                await liveActivity.end(phase: .done, message: String(text.prefix(80)) + suffix, after: 4)
+                await liveActivity.finish(phase: .done, message: String(text.prefix(80)) + suffix, after: 4, keepReady: SharedSettings.readyIndicator)
             }
             refreshDownloadedModels()
         } catch {
@@ -210,7 +243,7 @@ final class AppModel: DictationPerforming {
             cleanup(capture.url)
             state = .failed(error.localizedDescription)
             Feedback.error()
-            await liveActivity.end(phase: .failed, message: error.localizedDescription, after: 6)
+            await liveActivity.finish(phase: .failed, message: error.localizedDescription, after: 6, keepReady: SharedSettings.readyIndicator)
         }
         DarwinNotify.post(SharedConstants.Darwin.recordingStateChanged)
         finishBackgroundWork()
@@ -224,7 +257,7 @@ final class AppModel: DictationPerforming {
         }
         recorder.shutdown()
         state = .idle
-        liveActivity.endImmediately()
+        liveActivity.revertToReadyOrEnd(keepReady: SharedSettings.readyIndicator)
         DarwinNotify.post(SharedConstants.Darwin.recordingStateChanged)
     }
 

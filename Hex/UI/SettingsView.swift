@@ -11,6 +11,7 @@ struct SettingsView: View {
     @State private var haptics = SharedSettings.haptics
     @State private var minDuration = SharedSettings.minDuration
     @State private var maxMinutes = SharedSettings.maxMinutes
+    @State private var readyIndicator = SharedSettings.readyIndicator
 
     var body: some View {
         List {
@@ -42,6 +43,12 @@ struct SettingsView: View {
             Section("Diktat") {
                 Toggle("In Zwischenablage kopieren", isOn: $autoCopy)
                 Toggle("Hex-Tastatur fügt automatisch ein", isOn: $autoInsert)
+                VStack(alignment: .leading, spacing: 4) {
+                    Toggle("Bereitschafts-Anzeige", isOn: $readyIndicator)
+                    Text("Hält ein kleines Hex-Symbol in der Dynamic Island. Nur damit kann der Action Button die Aufnahme starten, ohne die App zu öffnen.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
                 Toggle("Soundeffekte", isOn: $soundEffects)
                 Toggle("Haptik", isOn: $haptics)
                 VStack(alignment: .leading, spacing: 6) {
@@ -75,6 +82,7 @@ struct SettingsView: View {
         .onChange(of: haptics) { SharedSettings.haptics = haptics }
         .onChange(of: minDuration) { SharedSettings.minDuration = minDuration }
         .onChange(of: maxMinutes) { SharedSettings.maxMinutes = maxMinutes }
+        .onChange(of: readyIndicator) { model.setReadyIndicator(readyIndicator) }
     }
 }
 

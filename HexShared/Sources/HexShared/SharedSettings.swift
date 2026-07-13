@@ -62,6 +62,13 @@ public enum SharedSettings {
         set { defaults.set(newValue, forKey: Key.maxMinutes) }
     }
 
+    /// Keep a quiet "ready" Live Activity alive so the Action Button can start
+    /// recording fully headless (background updates are allowed, fresh starts are not).
+    public static var readyIndicator: Bool {
+        get { bool("readyIndicator", default: true) }
+        set { defaults.set(newValue, forKey: "readyIndicator") }
+    }
+
     public static var didOnboard: Bool {
         get { bool(Key.didOnboard, default: false) }
         set { defaults.set(newValue, forKey: Key.didOnboard) }

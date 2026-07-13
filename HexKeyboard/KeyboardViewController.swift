@@ -77,6 +77,11 @@ final class KeyboardViewController: UIInputViewController {
         store.markPendingConsumed(id: pending.id)
         insertSmart(pending.text)
         state.flashInserted()
+        // Belt & suspenders: iOS may have rejected the app's background pasteboard
+        // write; the keyboard (full access) copies again so paste works everywhere.
+        if SharedSettings.autoCopy {
+            UIPasteboard.general.string = pending.text
+        }
     }
 
     /// Inserts with a leading space when the cursor sits right after a word.

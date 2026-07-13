@@ -6,6 +6,7 @@ import WidgetKit
 extension RecordingActivityAttributes.ContentState.Phase {
     var label: String {
         switch self {
+        case .ready: "Bereit"
         case .recording: "Höre zu …"
         case .transcribing: "Transkribiere …"
         case .done: "Fertig"
@@ -15,6 +16,7 @@ extension RecordingActivityAttributes.ContentState.Phase {
 
     var symbol: String {
         switch self {
+        case .ready: "hexagon"
         case .recording: "mic.fill"
         case .transcribing: "waveform"
         case .done: "checkmark.circle.fill"
@@ -24,6 +26,7 @@ extension RecordingActivityAttributes.ContentState.Phase {
 
     var tint: Color {
         switch self {
+        case .ready: .secondary
         case .recording: .red
         case .transcribing: .orange
         case .done: .green
@@ -60,6 +63,13 @@ struct RecordingLiveActivity: Widget {
                 }
                 DynamicIslandExpandedRegion(.bottom) {
                     switch context.state.phase {
+                    case .ready:
+                        Button(intent: StartDictationFromActivityIntent()) {
+                            Label("Aufnehmen", systemImage: "mic.fill")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .tint(.red)
                     case .recording:
                         HStack(spacing: 12) {
                             Button(intent: CancelDictationIntent()) {
@@ -133,6 +143,13 @@ private struct LockScreenActivityView: View {
             }
 
             switch state.phase {
+            case .ready:
+                Button(intent: StartDictationFromActivityIntent()) {
+                    Label("Aufnehmen", systemImage: "mic.fill")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(.red)
             case .recording:
                 HStack(spacing: 12) {
                     Button(intent: CancelDictationIntent()) {
