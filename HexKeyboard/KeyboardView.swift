@@ -63,20 +63,17 @@ struct KeyboardView: View {
     @ViewBuilder
     private var transcriptArea: some View {
         if !state.hasFullAccess || !state.storeAvailable {
-            Button(action: openApp) {
-                VStack(spacing: 4) {
-                    Label("Vollzugriff aktivieren", systemImage: "exclamationmark.triangle.fill")
-                        .font(.footnote.weight(.semibold))
-                    Text("Einstellungen → Allgemein → Tastatur → Hex Tastatur → Vollzugriff erlauben")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
-                }
-                .frame(maxWidth: .infinity)
-                .padding(10)
-                .background(Color.yellow.opacity(0.15), in: RoundedRectangle(cornerRadius: 12))
+            VStack(spacing: 4) {
+                Label("Vollzugriff nötig", systemImage: "exclamationmark.triangle.fill")
+                    .font(.footnote.weight(.semibold))
+                Text("Einstellungen → Allgemein → Tastatur → Tastaturen → Hex Tastatur → „Vollzugriff erlauben“")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
             }
-            .buttonStyle(.plain)
+            .frame(maxWidth: .infinity)
+            .padding(10)
+            .background(Color.yellow.opacity(0.15), in: RoundedRectangle(cornerRadius: 12))
         } else if let latest = state.recent.first {
             Button {
                 insertText(latest.text)
@@ -141,7 +138,6 @@ struct KeyboardView: View {
             if state.needsInputModeSwitchKey {
                 KeyButton(systemImage: "globe", action: switchKeyboard)
             }
-            KeyButton(systemImage: "hexagon.fill", action: openApp)
             Button(action: insertSpace) {
                 Text("Leerzeichen")
                     .font(.footnote)

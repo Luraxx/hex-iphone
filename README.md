@@ -9,11 +9,16 @@ Transcription runs fully on-device using the same models as Hex on macOS
 
 ## How it works
 
-1. **Press the Action Button** (from anywhere — home screen, any app, lock screen): recording starts in the background and the **Dynamic Island** shows a timer plus Done/Discard buttons.
-2. Press again (or tap "Done" in the Dynamic Island): Hex transcribes locally (v3 is multilingual, 25 languages).
-3. The text is **copied to the clipboard** and queued for the **Hex keyboard**: if it is active in the current text field (or gets opened), it **auto-inserts** the text.
+1. **Press the Action Button** (from anywhere): Hex opens for a moment and recording starts; the **Dynamic Island** shows a timer plus Done/Discard buttons. You can immediately swipe back to whatever app you were in — recording continues in the background.
+2. Tap **"Fertig" in the Dynamic Island** (no need to reopen Hex) or press the Action Button again: Hex transcribes locally (v3 is multilingual, 25 languages).
+3. The text is **copied to the clipboard** and queued for the **Hex keyboard**: back in your text field, the Hex keyboard **auto-inserts** it (or tap a recent transcript chip).
 
-> **Honest platform limitation:** iOS does not let apps type text into other apps system-wide or intercept a held-down key globally like macOS does. The Action Button also delivers no "release" event — hence toggle (press/press) instead of hold. Action Button + Dynamic Island + auto-inserting keyboard is as close to the Mac experience as iOS allows (the same pattern used by superwhisper and friends).
+> **Honest platform limits (why it works this way):** iOS is far more locked down than macOS, and three separate rules shape this app:
+> - Apps **cannot start a recording purely in the background** — a Live Activity is required and iOS only lets you start one from the foreground (`Target is not foreground`). So the Action Button briefly opens Hex to start; the *rest* is background.
+> - **Keyboard extensions cannot access the microphone** at all (hard sandbox rule), so the keyboard can't record.
+> - Since iOS 18, **keyboard extensions can no longer open their container app**, so the keyboard can't be a recording trigger either.
+>
+> The result — **Action Button triggers, keyboard auto-inserts** — is the only combination iOS allows, and it's the same pattern every on-device dictation app uses. Apple's built-in dictation (the mic on the system keyboard) can type into any field only because it's a system privilege third-party apps don't get.
 
 ## Requirements
 
@@ -52,7 +57,7 @@ No Action Button? Map Back Tap (*Accessibility → Touch → Back Tap*) to the "
 ## Features
 
 - Parakeet TDT **v2** (English) and **v3** (25 languages) with model management and download progress, like Hex on the Mac
-- Recording starts **without opening the app** via `AudioRecordingIntent` (iOS 18) + Live Activity
+- Action Button opens Hex briefly to start; recording then continues in the background (audio background mode) and is stopped from the Dynamic Island
 - Dynamic Island: timer, Done/Discard, status, result preview
 - Auto-copy + auto-insert (Hex keyboard), searchable history, "ignore under 0.3 s", max-duration safety net, system recording sounds + haptics
 - Everything on-device; recording files are deleted right after transcription
