@@ -1,0 +1,21 @@
+# macOS
+.DS_Store
+
+# Xcode
+DerivedData/
+build/
+*.xcuserstate
+xcuserdata/
+*.xcscmblueprint
+*.xccheckout
+.swiftpm/
+.spm-cache/
+.build/
+
+# Artefakte
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# Temp
+scripts/icon-work/

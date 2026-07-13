@@ -1,0 +1,86 @@
+name: Hex
+options:
+  bundleIdPrefix: io.github.luraxx
+  deploymentTarget:
+    iOS: "18.0"
+  createIntermediateGroups: true
+  groupSortPosition: top
+
+packages:
+  FluidAudio:
+    url: https://github.com/FluidInference/FluidAudio
+    exactVersion: 0.15.5
+  HexShared:
+    path: HexShared
+
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    TARGETED_DEVICE_FAMILY: "1"
+    CODE_SIGN_STYLE: Automatic
+    MARKETING_VERSION: "1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    IPHONEOS_DEPLOYMENT_TARGET: "18.0"
+    SWIFT_STRICT_CONCURRENCY: minimal
+    ENABLE_USER_SCRIPT_SANDBOXING: "YES"
+
+schemes:
+  Hex:
+    build:
+      targets:
+        Hex: all
+
+targets:
+  Hex:
+    type: application
+    platform: iOS
+    sources:
+      - path: Hex
+      - path: Shared
+        group: Hex
+    dependencies:
+      - package: FluidAudio
+      - package: HexShared
+      - target: HexWidgets
+      - target: HexKeyboard
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: io.github.luraxx.hex
+        PRODUCT_NAME: Hex
+        INFOPLIST_FILE: Hex/Info.plist
+        GENERATE_INFOPLIST_FILE: "NO"
+        CODE_SIGN_ENTITLEMENTS: Hex/Hex.entitlements
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+
+  HexWidgets:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: HexWidgets
+      - path: Shared
+        group: HexWidgets
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: io.github.luraxx.hex.widgets
+        PRODUCT_NAME: HexWidgets
+        INFOPLIST_FILE: HexWidgets/Info.plist
+        GENERATE_INFOPLIST_FILE: "NO"
+        SKIP_INSTALL: "YES"
+        SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) HEX_WIDGET_EXTENSION"
+
+  HexKeyboard:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: HexKeyboard
+    dependencies:
+      - package: HexShared
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: io.github.luraxx.hex.keyboard
+        PRODUCT_NAME: HexKeyboard
+        INFOPLIST_FILE: HexKeyboard/Info.plist
+        GENERATE_INFOPLIST_FILE: "NO"
+        CODE_SIGN_ENTITLEMENTS: HexKeyboard/HexKeyboard.entitlements
+        SKIP_INSTALL: "YES"
