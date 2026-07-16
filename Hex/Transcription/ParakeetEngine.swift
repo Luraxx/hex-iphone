@@ -82,26 +82,17 @@ actor ParakeetEngine {
 
         SharedModelStore.migrateLocalIfNeeded(model)
         let targetDirectory = SharedModelStore.directory(for: model)
-        let needsDownload = !AsrModels.modelsExist(at: targetDirectory, version: model.asrVersion)
-        var pollTask: Task<Void, Never>?
-        if needsDownload {
-            let directory = targetDirectory
-            pollTask = Task.detached {
-                while !Task.isCancelled {
-                    try? await Task.sleep(nanoseconds: 300_000_000)
-                    if let size = Self.directorySize(directory) {
-                        let target = 650.0 * 1024 * 1024
-                        let fraction = min(0.9, max(0.02, Double(size) / target * 0.9))
-                        progress(fraction)
-                    }
-                }
-            }
-        } else {
-            progress(0.5)
-        }
-        defer { pollTask?.cancel() }
 
-        let models = try await AsrModels.downloadAndLoad(to: targetDirectory, version: model.asrVersion)
+        // Real progress straight from FluidAudio (download AND compile phases) —
+        // the old directory-size estimate assumed 650 MB and stalled at ~64 %
+        // because the int8 encoder variant is only ~460 MB.
+        let models = try await AsrModels.downloadAndLoad(
+            to: targetDirectory,
+            version: model.asrVersion,
+            progressHandler: { snapshot in
+                progress(min(0.98, max(0.02, snapshot.fractionCompleted)))
+            }
+        )
         let manager = AsrManager(config: .init(), models: models)
         asr = manager
         loadedModel = model
