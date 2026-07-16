@@ -22,7 +22,8 @@ actor ParakeetEngine {
     // MARK: - Model management
 
     func isDownloaded(_ model: HexModel) -> Bool {
-        let directory = AsrModels.defaultCacheDirectory(for: model.asrVersion)
+        SharedModelStore.migrateLocalIfNeeded(model)
+        let directory = SharedModelStore.directory(for: model)
         return AsrModels.modelsExist(at: directory, version: model.asrVersion)
     }
 
@@ -31,8 +32,8 @@ actor ParakeetEngine {
     }
 
     func delete(_ model: HexModel) {
-        let directory = AsrModels.defaultCacheDirectory(for: model.asrVersion)
-        try? FileManager.default.removeItem(at: directory)
+        try? FileManager.default.removeItem(at: SharedModelStore.directory(for: model))
+        try? FileManager.default.removeItem(at: AsrModels.defaultCacheDirectory(for: model.asrVersion))
         if loadedModel == model {
             asr = nil
             loadedModel = nil
@@ -79,10 +80,12 @@ actor ParakeetEngine {
     private func performLoad(_ model: HexModel, progress: @escaping @Sendable (Double) -> Void) async throws {
         progress(0.02)
 
-        let needsDownload = !isDownloaded(model)
+        SharedModelStore.migrateLocalIfNeeded(model)
+        let targetDirectory = SharedModelStore.directory(for: model)
+        let needsDownload = !AsrModels.modelsExist(at: targetDirectory, version: model.asrVersion)
         var pollTask: Task<Void, Never>?
         if needsDownload {
-            let directory = downloadDirectory(for: model)
+            let directory = targetDirectory
             pollTask = Task.detached {
                 while !Task.isCancelled {
                     try? await Task.sleep(nanoseconds: 300_000_000)
@@ -98,7 +101,7 @@ actor ParakeetEngine {
         }
         defer { pollTask?.cancel() }
 
-        let models = try await AsrModels.downloadAndLoad(version: model.asrVersion)
+        let models = try await AsrModels.downloadAndLoad(to: targetDirectory, version: model.asrVersion)
         let manager = AsrManager(config: .init(), models: models)
         asr = manager
         loadedModel = model
