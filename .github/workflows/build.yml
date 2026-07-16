@@ -1,8 +1,9 @@
 name: iOS Build
 
+# Manual only: keep the workflow maintained, but don't auto-run on every push
+# (macOS runners burn the free minutes fast). Trigger from the Actions tab, or
+# `gh workflow run build.yml`, whenever a change actually needs verifying.
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
 
 jobs:
